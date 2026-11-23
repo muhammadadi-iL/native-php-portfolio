@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+LABEL="com.muhammadadil.portfolio-php"
+UID_NUM="$(id -u)"
+DOMAIN="gui/${UID_NUM}"
+
+usage() {
+  echo "Usage: $0 {start|stop|restart|status|logs}"
+  exit 1
+}
+
+cmd="${1:-}"
+case "$cmd" in
+  start)
+    launchctl kickstart -k "${DOMAIN}/${LABEL}" 2>/dev/null || launchctl start "$LABEL"
+    echo "started ${LABEL}"
+    ;;
+  stop)
+    launchctl bootout "${DOMAIN}/${LABEL}" 2>/dev/null || launchctl stop "$LABEL" || true
+    echo "stopped ${LABEL}"
+    ;;
+  restart)
+    "$0" stop || true
+    sleep 1
+    ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+    "$ROOT/bin/install-brew-service"
+    ;;
+  status)
+    if launchctl print "${DOMAIN}/${LABEL}" >/dev/null 2>&1; then
+      launchctl print "${DOMAIN}/${LABEL}" | sed -n '1,40p'
+    else
+      echo "${LABEL} is not loaded"
+      exit 1
+    fi
+    ;;
+  logs)
+    ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+    tail -n 50 -f "$ROOT/storage/logs/serve.out.log" "$ROOT/storage/logs/serve.err.log"
+    ;;
+  *)
+    usage
+    ;;
+esac

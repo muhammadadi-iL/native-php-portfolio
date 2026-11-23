@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+LABEL="com.muhammadadil.portfolio-php"
+PLIST_SRC="$ROOT/ops/${LABEL}.plist"
+PLIST_DST="$HOME/Library/LaunchAgents/${LABEL}.plist"
+PHP_BIN="$(command -v php || true)"
+HOST="${HOST:-127.0.0.1}"
+PORT="${PORT:-8080}"
+
+if [[ -z "$PHP_BIN" ]]; then
+  echo "php missing. Run: brew install php && brew services start php" >&2
+  exit 1
+fi
+
+# Ensure Homebrew PHP/FPM service is running (provides the runtime).
+if command -v brew >/dev/null 2>&1; then
+  echo "Starting Homebrew php service (php-fpm)…"
+  brew services start php >/dev/null 2>&1 || brew services restart php >/dev/null 2>&1 || true
+  brew services list | awk 'NR==1 || /php/'
+fi
+
+mkdir -p "$HOME/Library/LaunchAgents" "$ROOT/storage/logs"
+
+LOG_OUT="$ROOT/storage/logs/serve.out.log"
+LOG_ERR="$ROOT/storage/logs/serve.err.log"
+
+cat > "$PLIST_DST" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>${LABEL}</string>
+  <key>WorkingDirectory</key>
+  <string>${ROOT}</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>${PHP_BIN}</string>
+    <string>-S</string>
+    <string>${HOST}:${PORT}</string>
+    <string>-t</string>
+    <string>${ROOT}/public</string>
+    <string>${ROOT}/public/router.php</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>${LOG_OUT}</string>
+  <key>StandardErrorPath</key>
+  <string>${LOG_ERR}</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin</string>
+  </dict>
+</dict>
+</plist>
+EOF
+
+cp "$PLIST_DST" "$PLIST_SRC" 2>/dev/null || true
+
+launchctl bootout "gui/$(id -u)/${LABEL}" >/dev/null 2>&1 || true
+launchctl bootstrap "gui/$(id -u)" "$PLIST_DST"
+launchctl enable "gui/$(id -u)/${LABEL}" >/dev/null 2>&1 || true
+launchctl kickstart -k "gui/$(id -u)/${LABEL}" >/dev/null 2>&1 || launchctl start "$LABEL" || true
+
+echo
+echo "Service installed: ${LABEL}"
+echo "URL: http://${HOST}:${PORT}/"
+echo
+echo "Useful commands:"
+echo "  launchctl print gui/\$(id -u)/${LABEL}"
+echo "  ./bin/service status|stop|restart"
+echo "  brew services list | grep php"

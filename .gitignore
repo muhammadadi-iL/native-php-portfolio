@@ -1,0 +1,13 @@
+.env
+.env.*
+!.env.example
+.DS_Store
+.idea/
+.vscode/
+storage/*.jsonl
+!storage/.gitkeep
+/vendor/
+*.log
+.php-serve.pid
+.com.muhammadadil.portfolio-php.plist.bak
+storage/logs/
